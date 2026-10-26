@@ -1,0 +1,28 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s tests -v
+      - run: sh -n install.sh bootstrap.sh uninstall.sh
+      - run: sudo python3 tests/integration.py
+      - name: Validate version and package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          test "v$(python3 routekeeper.py --version)" = "$TAG"
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="routekeeper-$TAG/" HEAD > "dist/routekeeper-$TAG.tar.gz"
+          cd dist
+          sha256sum "routekeeper-$TAG.tar.gz" > SHA256SUMS
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" dist/* --verify-tag --title "Routekeeper $TAG" --generate-notes
